@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vollbild Video Pixelator</title>
+    <title>Gabriel's Digital Fireplace</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body, html {
@@ -93,8 +93,8 @@
 
     <!-- Upload Screen -->
     <div id="upload-screen" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-zinc-950 px-4 text-center">
-        <h1 class="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
-            Pro Video Pixelator
+        <h1 class="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-red-500">
+            Gabriel's Digital Fireplace
         </h1>
         <p class="text-zinc-400 mb-8 max-w-md">Wähle ein lokales Video für den Vollbild-Loop mit Live-Filtern.</p>
         
@@ -115,7 +115,7 @@
                     <span id="pixel-display" class="value-text">Original</span>
                 </div>
                 <input type="range" id="pixel-slider" min="1" max="60" value="1" 
-                    class="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none accent-emerald-500"
+                    class="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none accent-orange-500"
                     oninput="applyFilters()">
             </div>
 
@@ -243,7 +243,6 @@
             cDisplay.innerText = cVal + "%";
 
             // 3. Kombinierten Filter auf Video-Element anwenden
-            // Syntax: url(#svg-filter) brightness(%) contrast(%)
             video.style.filter = `url(#pixelate-filter) brightness(${bVal}%) contrast(${cVal}%)`;
         }
 
