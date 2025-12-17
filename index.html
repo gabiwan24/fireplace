@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vollbild Video Pixelator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        /* Das Video füllt den gesamten Bildschirm aus */
+        #video-player {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover; 
+            /* Filter wird dynamisch via JS gesetzt */
+            z-index: 1;
+        }
+
+        /* Schwebendes Steuerungs-Panel */
+        .controls-overlay {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            width: 90%;
+            max-width: 500px;
+            background: rgba(10, 10, 10, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1.5rem;
+            border-radius: 1.5rem;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            pointer-events: auto;
+        }
+
+        /* Völliges Ausblenden bei Inaktivität */
+        .idle-hide {
+            opacity: 0 !important;
+            pointer-events: none;
+            cursor: none;
+        }
+
+        body.cursor-none {
+            cursor: none;
+        }
+
+        input[type=range] {
+            cursor: pointer;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.25rem;
+        }
+
+        .label-text {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #a1a1aa;
+        }
+
+        .value-text {
+            font-size: 0.7rem;
+            font-family: monospace;
+            background: #27272a;
+            padding: 0.1rem 0.4rem;
+            border-radius: 0.25rem;
+        }
+    </style>
+</head>
+<body class="text-zinc-100 font-sans">
+
+    <!-- Video Element -->
+    <video id="video-player" autoplay loop muted playsinline>
+        <!-- Quelle wird per JS gesetzt -->
+    </video>
+
+    <!-- Upload Screen -->
+    <div id="upload-screen" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-zinc-950 px-4 text-center">
+        <h1 class="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+            Pro Video Pixelator
+        </h1>
+        <p class="text-zinc-400 mb-8 max-w-md">Wähle ein lokales Video für den Vollbild-Loop mit Live-Filtern.</p>
+        
+        <label class="cursor-pointer bg-zinc-100 text-zinc-900 px-8 py-4 rounded-full font-bold hover:bg-white transition-all transform hover:scale-105 shadow-xl">
+            Video auswählen
+            <input type="file" id="file-selector" accept="video/*" class="hidden" onchange="handleFile(this)">
+        </label>
+    </div>
+
+    <!-- Schwebende Steuerung -->
+    <div id="ui-panel" class="controls-overlay hidden">
+        <div class="flex flex-col gap-5">
+            
+            <!-- Pixel Slider -->
+            <div>
+                <div class="slider-label">
+                    <span class="label-text">Pixel-Raster</span>
+                    <span id="pixel-display" class="value-text">Original</span>
+                </div>
+                <input type="range" id="pixel-slider" min="1" max="60" value="1" 
+                    class="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none accent-emerald-500"
+                    oninput="applyFilters()">
+            </div>
+
+            <!-- Helligkeit Slider -->
+            <div>
+                <div class="slider-label">
+                    <span class="label-text">Helligkeit</span>
+                    <span id="brightness-display" class="value-text">100%</span>
+                </div>
+                <input type="range" id="brightness-slider" min="0" max="200" value="100" 
+                    class="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none accent-blue-500"
+                    oninput="applyFilters()">
+            </div>
+
+            <!-- Kontrast Slider -->
+            <div>
+                <div class="slider-label">
+                    <span class="label-text">Kontrast</span>
+                    <span id="contrast-display" class="value-text">100%</span>
+                </div>
+                <input type="range" id="contrast-slider" min="0" max="200" value="100" 
+                    class="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none accent-purple-500"
+                    oninput="applyFilters()">
+            </div>
+
+            <div class="flex justify-between items-center pt-3 border-t border-zinc-800">
+                <button onclick="triggerNewFile()" class="text-[10px] text-zinc-500 hover:text-white uppercase tracking-tighter transition-colors">
+                    Datei wechseln
+                </button>
+                <button onclick="toggleFit()" id="fit-toggle" class="text-[10px] text-zinc-500 hover:text-white uppercase tracking-tighter transition-colors">
+                    Modus: Cover
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SVG Filter Definition -->
+    <svg xmlns="http://www.w3.org/2000/svg" class="absolute h-0 w-0 pointer-events-none">
+        <defs>
+            <filter id="pixelate-filter" x="0" y="0" width="100%" height="100%">
+                <feFlood x="0" y="0" width="1" height="1" result="pixel-source" />
+                <feComposite id="filter-size" width="1" height="1" in="SourceGraphic" operator="in" />
+                <feTile result="pixel-grid" />
+                <feComposite in="SourceGraphic" in2="pixel-grid" operator="in" />
+                <feMorphology id="filter-morph" operator="dilate" radius="0" />
+            </filter>
+        </defs>
+    </svg>
+
+    <script>
+        const video = document.getElementById('video-player');
+        const uiPanel = document.getElementById('ui-panel');
+        const uploadScreen = document.getElementById('upload-screen');
+        
+        // Slider Elements
+        const pSlider = document.getElementById('pixel-slider');
+        const bSlider = document.getElementById('brightness-slider');
+        const cSlider = document.getElementById('contrast-slider');
+        
+        // Displays
+        const pDisplay = document.getElementById('pixel-display');
+        const bDisplay = document.getElementById('brightness-display');
+        const cDisplay = document.getElementById('contrast-display');
+        
+        // SVG Elements
+        const filterSize = document.getElementById('filter-size');
+        const filterMorph = document.getElementById('filter-morph');
+        
+        let idleTimer;
+
+        function handleFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const videoURL = URL.createObjectURL(file);
+            video.src = videoURL;
+            video.loop = true;
+            
+            video.onloadedmetadata = () => {
+                video.play();
+                uploadScreen.classList.add('hidden');
+                uiPanel.classList.remove('hidden');
+                applyFilters(); // Initial Filter anwenden
+                startIdleTimer();
+            };
+        }
+
+        function triggerNewFile() {
+            document.getElementById('file-selector').click();
+        }
+
+        function toggleFit() {
+            const btn = document.getElementById('fit-toggle');
+            if (video.style.objectFit === 'contain') {
+                video.style.objectFit = 'cover';
+                btn.innerText = 'Modus: Cover';
+            } else {
+                video.style.objectFit = 'contain';
+                btn.innerText = 'Modus: Contain';
+            }
+        }
+
+        /**
+         * Kombiniert SVG-Pixel-Filter mit CSS Brightness & Contrast
+         */
+        function applyFilters() {
+            // 1. Pixelation Werte
+            const pVal = parseInt(pSlider.value);
+            if (pVal <= 1) {
+                pDisplay.innerText = "Original";
+                filterSize.setAttribute('width', '1');
+                filterSize.setAttribute('height', '1');
+                filterMorph.setAttribute('radius', '0');
+            } else {
+                pDisplay.innerText = pVal + "px";
+                filterSize.setAttribute('width', pVal);
+                filterSize.setAttribute('height', pVal);
+                filterMorph.setAttribute('radius', (pVal / 2));
+            }
+
+            // 2. Brightness & Contrast Werte
+            const bVal = bSlider.value;
+            const cVal = cSlider.value;
+            bDisplay.innerText = bVal + "%";
+            cDisplay.innerText = cVal + "%";
+
+            // 3. Kombinierten Filter auf Video-Element anwenden
+            // Syntax: url(#svg-filter) brightness(%) contrast(%)
+            video.style.filter = `url(#pixelate-filter) brightness(${bVal}%) contrast(${cVal}%)`;
+        }
+
+        function startIdleTimer() {
+            const resetTimer = () => {
+                uiPanel.classList.remove('idle-hide');
+                document.body.classList.remove('cursor-none');
+                clearTimeout(idleTimer);
+                
+                idleTimer = setTimeout(() => {
+                    if (uploadScreen.classList.contains('hidden')) {
+                        uiPanel.classList.add('idle-hide');
+                        document.body.classList.add('cursor-none');
+                    }
+                }, 3000);
+            };
+
+            ['mousemove', 'mousedown', 'keydown', 'touchstart'].forEach(evt => 
+                document.addEventListener(evt, resetTimer)
+            );
+            
+            resetTimer();
+        }
+    </script>
+</body>
+</html>
